@@ -83,8 +83,12 @@ export default function MorseApp() {
       </div>
 
       <p className="mt-3 text-xs text-gray-600">
-        Space = bấm • 2s không bấm = tự thêm ký tự • Esc = reset
+        Space = bấm · 1s không bấm = tự thêm ký tự · Esc = reset
       </p>
+      <a href="./morse/editor"
+        className="mt-3 text-xs text-gray-700 hover:text-gray-500 underline underline-offset-2 transition-colors">
+        Chỉnh layout node →
+      </a>
     </div>
   );
 }

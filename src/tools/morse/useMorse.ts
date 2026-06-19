@@ -13,7 +13,7 @@ export interface MorseState {
 }
 
 const DOT_MAX_MS     = 300;
-const AUTO_COMMIT_MS = 2000;
+const AUTO_COMMIT_MS = 1000;
 
 export function useMorse() {
   const [state, setState] = useState<MorseState>({

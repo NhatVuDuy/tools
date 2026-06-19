@@ -11,12 +11,13 @@ function snap(v: number, g: number) { return Math.round(v / g) * g; }
 
 interface DragState {
   path: string;
-  startCX: number; startCY: number;
+  startSVGX: number; startSVGY: number;
   origX: number; origY: number;
 }
 
 const ALL_PATHS = getAllPaths();
 const GRID_MAJOR = 50;
+const DISPLAY_SCALE = 2;
 
 function Slider({ label, value, min, max, step, unit, onChange }: {
   label: string; value: number; min: number; max: number; step: number; unit: string;
@@ -40,12 +41,13 @@ function Slider({ label, value, min, max, step, unit, onChange }: {
 }
 
 export default function MorseEditor() {
-  const [positions, setPositions]   = useState<PositionMap>(getDefaultPositions);
-  const [drag, setDrag]             = useState<DragState | null>(null);
-  const [gridSize, setGridSize]     = useState(SNAP_GRID);
-  const [layoutSaved, setLayoutSaved] = useState(false);
-  const [settings, setSettings]     = useState<MorseSettings>(DEFAULT_SETTINGS);
+  const [positions, setPositions]         = useState<PositionMap>(getDefaultPositions);
+  const [drag, setDrag]                   = useState<DragState | null>(null);
+  const [gridSize, setGridSize]           = useState(SNAP_GRID);
+  const [layoutSaved, setLayoutSaved]     = useState(false);
+  const [settings, setSettings]           = useState<MorseSettings>(DEFAULT_SETTINGS);
   const [settingsSaved, setSettingsSaved] = useState(false);
+  const [copied, setCopied]               = useState(false);
   const svgRef = useRef<SVGSVGElement>(null);
 
   useEffect(() => {
@@ -53,30 +55,31 @@ export default function MorseEditor() {
     setSettings(loadSettings());
   }, []);
 
-  const svgCoords = useCallback((cx: number, cy: number) => {
+  const clientToSVG = useCallback((clientX: number, clientY: number) => {
     const el = svgRef.current;
     if (!el) return { x: 0, y: 0 };
-    const r = el.getBoundingClientRect();
-    return { x: cx * SVG_W / r.width, y: cy * SVG_H / r.height };
+    const pt = el.createSVGPoint();
+    pt.x = clientX; pt.y = clientY;
+    const { x, y } = pt.matrixTransform(el.getScreenCTM()!.inverse());
+    return { x, y };
   }, []);
 
   const onNodeDown = useCallback((e: React.PointerEvent, path: string) => {
     e.preventDefault();
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
     const p = positions[path] ?? getDefaultPositions()[path];
-    setDrag({ path, startCX: e.clientX, startCY: e.clientY, origX: p.x, origY: p.y });
+    const svgPt = clientToSVG(e.clientX, e.clientY);
+    setDrag({ path, startSVGX: svgPt.x, startSVGY: svgPt.y, origX: p.x, origY: p.y });
     setLayoutSaved(false);
-  }, [positions]);
+  }, [positions, clientToSVG]);
 
   const onSVGMove = useCallback((e: React.PointerEvent) => {
     if (!drag) return;
-    const dxClient = e.clientX - drag.startCX;
-    const dyClient = e.clientY - drag.startCY;
-    const { x: dxSVG, y: dySVG } = svgCoords(dxClient, dyClient);
-    const newX = Math.max(gridSize, Math.min(SVG_W - gridSize, snap(drag.origX + dxSVG, gridSize)));
-    const newY = Math.max(gridSize, Math.min(SVG_H - gridSize, snap(drag.origY + dySVG, gridSize)));
+    const { x, y } = clientToSVG(e.clientX, e.clientY);
+    const newX = Math.max(gridSize, Math.min(SVG_W - gridSize, snap(drag.origX + (x - drag.startSVGX), gridSize)));
+    const newY = Math.max(gridSize, Math.min(SVG_H - gridSize, snap(drag.origY + (y - drag.startSVGY), gridSize)));
     setPositions(prev => ({ ...prev, [drag.path]: { x: newX, y: newY } }));
-  }, [drag, svgCoords, gridSize]);
+  }, [drag, clientToSVG, gridSize]);
 
   const onSVGUp = useCallback(() => setDrag(null), []);
 
@@ -106,7 +109,12 @@ export default function MorseEditor() {
     setSettingsSaved(false);
   };
 
-  // Grid lines
+  const handleCopyJSON = async () => {
+    await navigator.clipboard.writeText(JSON.stringify(positions, null, 2));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   const gridLines: React.ReactElement[] = [];
   for (let x = 0; x <= SVG_W; x += gridSize) {
     gridLines.push(
@@ -129,11 +137,11 @@ export default function MorseEditor() {
         MORSE CODE — Layout Editor
       </h1>
       <p className="text-xs text-gray-500 mb-4">
-        Kéo node để đặt lại vị trí · Snap theo grid · Nhấn Submit để lưu
+        Kéo node để đặt lại vị trí · Snap theo grid · Cuộn để xem toàn bộ canvas
       </p>
 
       {/* Layout toolbar */}
-      <div className="flex gap-3 items-center mb-4 flex-wrap justify-center">
+      <div className="flex gap-3 items-center mb-3 flex-wrap justify-center">
         <label className="text-xs text-gray-400 flex items-center gap-2">
           Grid
           <select
@@ -157,20 +165,27 @@ export default function MorseEditor() {
         {layoutSaved && <span className="text-green-400 text-xs">✓ Đã lưu!</span>}
       </div>
 
-      {/* SVG canvas */}
-      <div className="w-full max-w-5xl">
+      {/* Portrait scrollable canvas — viewport matches phone proportions */}
+      <div
+        className="overflow-auto rounded-xl border border-gray-700 bg-gray-950"
+        style={{ maxWidth: 440, maxHeight: "75vh", width: "100%" }}
+      >
         <svg
           ref={svgRef}
           viewBox={`0 0 ${SVG_W} ${SVG_H}`}
-          className="w-full rounded-xl bg-gray-950 border border-gray-700"
-          style={{ fontFamily: "monospace", touchAction: "none" }}
+          style={{
+            width: SVG_W * DISPLAY_SCALE,
+            height: SVG_H * DISPLAY_SCALE,
+            display: "block",
+            fontFamily: "monospace",
+            touchAction: "none",
+          }}
           onPointerMove={onSVGMove}
           onPointerUp={onSVGUp}
           onPointerLeave={onSVGUp}
         >
           {gridLines}
 
-          {/* Edges */}
           {ALL_PATHS.filter(p => p !== "").map(path => {
             const { x: x2, y: y2 } = pos(path);
             const { x: x1, y: y1 } = pos(path.slice(0, -1));
@@ -178,7 +193,6 @@ export default function MorseEditor() {
               stroke="#334155" strokeWidth={1} />;
           })}
 
-          {/* Nodes */}
           {ALL_PATHS.map(path => {
             const node = path === "" ? morseTree : getNodeByPath(path);
             if (!node) return null;
@@ -205,10 +219,10 @@ export default function MorseEditor() {
               );
             }
 
-            const fillDash  = isDragging ? "#c2410c" : "#7c2d12";
+            const fillDash   = isDragging ? "#c2410c" : "#7c2d12";
             const strokeDash = isDragging ? "#fed7aa" : "#fb923c";
-            const fillDot   = isDragging ? "#1d4ed8" : "#1e3a8a";
-            const strokeDot = isDragging ? "#bfdbfe" : "#60a5fa";
+            const fillDot    = isDragging ? "#1d4ed8" : "#1e3a8a";
+            const strokeDot  = isDragging ? "#bfdbfe" : "#60a5fa";
 
             return (
               <g key={path} style={{ cursor: isDragging ? "grabbing" : "grab" }}
@@ -238,22 +252,21 @@ export default function MorseEditor() {
         </svg>
       </div>
 
-      {/* JSON output */}
-      <div className="w-full max-w-5xl mt-4">
-        <p className="text-xs text-gray-500 mb-1">
-          JSON toạ độ — gửi cho Claude để hardcode vĩnh viễn vào code:
-        </p>
-        <textarea
-          readOnly
-          value={JSON.stringify(positions, null, 2)}
-          className="w-full h-36 bg-gray-900 border border-gray-700 rounded-lg p-3 font-mono text-xs text-gray-400 resize-y"
-        />
+      {/* Copy JSON */}
+      <div className="w-full mt-3 flex items-center gap-3" style={{ maxWidth: 440 }}>
+        <button
+          onClick={handleCopyJSON}
+          className="px-4 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-sm text-white font-semibold transition-all"
+        >
+          {copied ? "✓ Đã copy!" : "⎘ Copy JSON toạ độ"}
+        </button>
+        <span className="text-xs text-gray-600">gửi cho Claude để hardcode vĩnh viễn</span>
       </div>
 
       {/* Settings panel */}
-      <div className="w-full max-w-5xl mt-6 bg-gray-900 border border-gray-700 rounded-xl p-5">
+      <div className="w-full mt-6 bg-gray-900 border border-gray-700 rounded-xl p-5" style={{ maxWidth: 440 }}>
         <h2 className="text-sm font-bold text-yellow-400 mb-4">Cài đặt thời gian</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        <div className="flex flex-col gap-5">
           <Slider
             label="Dot tối đa" value={settings.dotMaxMs}
             min={50} max={500} step={10} unit="ms"

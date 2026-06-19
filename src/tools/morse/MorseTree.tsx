@@ -93,12 +93,22 @@ export default function MorseTree({ currentPath, antennaFlash }: Props) {
         </filter>
       </defs>
 
-      {/* Edges — thicker on active path */}
+      {/* Edges — colored by destination node when on active path */}
       {allPaths.filter(p => p !== "").map(path => {
+        const isDash = path.at(-1) === "-";
+        const isActive = currentPath !== "" && currentPath.startsWith(path);
+        const isEndpoint = path === currentPath;
+        let stroke = "#94a3b8";
+        let sw = 2;
+        if (isActive) {
+          sw = 3;
+          stroke = isEndpoint
+            ? (isDash ? "#ef4444" : "#22c55e")
+            : (isDash ? "#f97316" : "#60a5fa");
+        }
         const { x: x2, y: y2 } = pos(path);
         const { x: x1, y: y1 } = pos(path.slice(0, -1));
-        const onPath = currentPath !== "" && currentPath.startsWith(path);
-        return <line key={`e${path}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#cbd5e1" strokeWidth={onPath ? 3 : 2} />;
+        return <line key={`e${path}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke={stroke} strokeWidth={sw} />;
       })}
 
       {/* Antenna root */}

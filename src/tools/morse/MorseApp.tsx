@@ -43,7 +43,14 @@ export default function MorseApp() {
       <div className="flex-none px-4 pt-3 pb-1 flex flex-col items-center gap-1.5">
         {/* String — single line, horizontal scroll */}
         <div className="w-full max-w-sm bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 font-mono text-lg text-green-400 overflow-x-auto whitespace-nowrap scrollbar-none">
-          {state.builtString || <span className="text-gray-700">...</span>}
+          {state.builtString
+            ? state.builtString.split("").map((c, i) =>
+                c === " "
+                  ? <span key={i} className="text-gray-500">_</span>
+                  : <span key={i}>{c}</span>
+              )
+            : <span className="text-gray-700">...</span>
+          }
         </div>
 
         {/* Current path */}
@@ -100,10 +107,14 @@ export default function MorseApp() {
         <div className="text-xs text-gray-700 text-center">Space = bấm · 1s = tự thêm · Esc = reset</div>
 
         {/* CTA row */}
-        <div>
+        <div className="flex gap-4">
           <Link href="/morse/editor"
             className="text-xs text-gray-600 hover:text-gray-400 underline underline-offset-2 transition-colors">
             Layout →
+          </Link>
+          <Link href="/morse/numbers"
+            className="text-xs text-gray-600 hover:text-gray-400 underline underline-offset-2 transition-colors">
+            Số 0–9 →
           </Link>
         </div>
       </div>

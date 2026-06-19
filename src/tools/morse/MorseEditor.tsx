@@ -48,11 +48,19 @@ export default function MorseEditor() {
   const [settings, setSettings]           = useState<MorseSettings>(DEFAULT_SETTINGS);
   const [settingsSaved, setSettingsSaved] = useState(false);
   const [copied, setCopied]               = useState(false);
-  const svgRef = useRef<SVGSVGElement>(null);
+  const svgRef       = useRef<SVGSVGElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setPositions(loadPositions());
     setSettings(loadSettings());
+    // Scroll to show the tree (nodes are at SVG x≈225–625, y≈30–380; physical 2×)
+    setTimeout(() => {
+      if (containerRef.current) {
+        containerRef.current.scrollLeft = 450;
+        containerRef.current.scrollTop  = 0;
+      }
+    }, 0);
   }, []);
 
   const clientToSVG = useCallback((clientX: number, clientY: number) => {
@@ -84,12 +92,14 @@ export default function MorseEditor() {
   const onSVGUp = useCallback(() => setDrag(null), []);
 
   const handleSubmitLayout = () => {
+    if (!window.confirm("Lưu layout hiện tại?")) return;
     savePositions(positions);
     window.dispatchEvent(new Event("morse-layout-saved"));
     setLayoutSaved(true);
   };
 
   const handleResetLayout = () => {
+    if (!window.confirm("Reset vị trí về mặc định?")) return;
     const d = getDefaultPositions();
     setPositions(d);
     savePositions(d);
@@ -98,6 +108,7 @@ export default function MorseEditor() {
   };
 
   const handleSaveSettings = () => {
+    if (!window.confirm("Lưu cài đặt thời gian?")) return;
     saveSettings(settings);
     window.dispatchEvent(new Event("morse-settings-saved"));
     setSettingsSaved(true);
@@ -105,6 +116,7 @@ export default function MorseEditor() {
   };
 
   const handleResetSettings = () => {
+    if (!window.confirm("Reset cài đặt về mặc định?")) return;
     setSettings({ ...DEFAULT_SETTINGS });
     setSettingsSaved(false);
   };
@@ -167,6 +179,7 @@ export default function MorseEditor() {
 
       {/* Portrait scrollable canvas — viewport matches phone proportions */}
       <div
+        ref={containerRef}
         className="overflow-auto rounded-xl border border-gray-700 bg-gray-950"
         style={{ maxWidth: 440, maxHeight: "75vh", width: "100%" }}
       >

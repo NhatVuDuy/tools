@@ -5,95 +5,90 @@ import { getNodeByPath } from "./morseTree";
 export type SignalType = "dot" | "dash";
 
 export interface MorseState {
-  currentPath: string;       // e.g. ".-"
-  builtString: string;       // decoded chars so far
+  currentPath: string;
+  builtString: string;
   lastSignal: SignalType | null;
   isPressed: boolean;
   antennaFlash: boolean;
 }
 
-const DOT_MAX_MS = 300; // press shorter than this = dot
+const DOT_MAX_MS     = 300;
+const AUTO_COMMIT_MS = 2000;
 
 export function useMorse() {
   const [state, setState] = useState<MorseState>({
-    currentPath: "",
-    builtString: "",
-    lastSignal: null,
-    isPressed: false,
-    antennaFlash: false,
+    currentPath: "", builtString: "", lastSignal: null, isPressed: false, antennaFlash: false,
   });
 
-  const pressStartRef = useRef<number | null>(null);
-  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const antennaTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pressStartRef    = useRef<number | null>(null);
+  const holdTimerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const antennaTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoCommitRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearAutoCommit = useCallback(() => {
+    if (autoCommitRef.current) { clearTimeout(autoCommitRef.current); autoCommitRef.current = null; }
+  }, []);
+
+  const scheduleAutoCommit = useCallback(() => {
+    clearAutoCommit();
+    autoCommitRef.current = setTimeout(() => {
+      setState(s => {
+        if (!s.currentPath) return s;
+        const node = getNodeByPath(s.currentPath);
+        if (node?.char)
+          return { ...s, builtString: s.builtString + node.char, currentPath: "", lastSignal: null };
+        return { ...s, currentPath: "", lastSignal: null };
+      });
+    }, AUTO_COMMIT_MS);
+  }, [clearAutoCommit]);
 
   const flashAntenna = useCallback(() => {
     setState(s => ({ ...s, antennaFlash: true }));
     if (antennaTimerRef.current) clearTimeout(antennaTimerRef.current);
-    antennaTimerRef.current = setTimeout(() => {
-      setState(s => ({ ...s, antennaFlash: false }));
-    }, 200);
+    antennaTimerRef.current = setTimeout(() => setState(s => ({ ...s, antennaFlash: false })), 200);
   }, []);
 
   const onPressStart = useCallback(() => {
+    clearAutoCommit();
     pressStartRef.current = Date.now();
     setState(s => ({ ...s, isPressed: true }));
     flashAntenna();
-
-    // 3s hold = reset
     holdTimerRef.current = setTimeout(() => {
-      setState(s => ({
-        ...s,
-        currentPath: "",
-        lastSignal: null,
-        isPressed: false,
-      }));
+      clearAutoCommit();
+      setState(s => ({ ...s, currentPath: "", lastSignal: null, isPressed: false }));
       pressStartRef.current = null;
     }, 3000);
-  }, [flashAntenna]);
+  }, [clearAutoCommit, flashAntenna]);
 
   const onPressEnd = useCallback(() => {
     if (pressStartRef.current === null) return;
-    if (holdTimerRef.current) {
-      clearTimeout(holdTimerRef.current);
-      holdTimerRef.current = null;
-    }
+    if (holdTimerRef.current) { clearTimeout(holdTimerRef.current); holdTimerRef.current = null; }
 
     const duration = Date.now() - pressStartRef.current;
     pressStartRef.current = null;
-    const signal: SignalType = duration < DOT_MAX_MS ? "dot" : "dash";
-    const sym = signal === "dot" ? "." : "-";
+    const sym = duration < DOT_MAX_MS ? "." : "-";
+    const signal: SignalType = sym === "." ? "dot" : "dash";
 
     setState(s => {
       const newPath = s.currentPath + sym;
       const node = getNodeByPath(newPath);
-      // If no node exists, stay at current (dead path)
       if (!node) return { ...s, isPressed: false, lastSignal: signal };
       return { ...s, currentPath: newPath, lastSignal: signal, isPressed: false };
     });
-  }, []);
 
-  const commitChar = useCallback(() => {
-    setState(s => {
-      const node = getNodeByPath(s.currentPath);
-      if (!node || !node.char) return { ...s, currentPath: "", lastSignal: null };
-      return {
-        ...s,
-        builtString: s.builtString + node.char,
-        currentPath: "",
-        lastSignal: null,
-      };
-    });
-  }, []);
+    scheduleAutoCommit();
+  }, [scheduleAutoCommit]);
 
   const reset = useCallback(() => {
+    clearAutoCommit();
     if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
     setState(s => ({ ...s, currentPath: "", lastSignal: null, isPressed: false }));
-  }, []);
+  }, [clearAutoCommit]);
 
   const clearString = useCallback(() => {
+    clearAutoCommit();
     setState(s => ({ ...s, builtString: "", currentPath: "", lastSignal: null }));
-  }, []);
+  }, [clearAutoCommit]);
 
-  return { state, onPressStart, onPressEnd, commitChar, reset, clearString };
+  return { state, onPressStart, onPressEnd, reset, clearString };
 }

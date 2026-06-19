@@ -11,11 +11,11 @@ interface Props {
 const ROOT_X = SVG_W / 2;
 const ROOT_Y = 30;
 
-// Node visual sizes by depth
-const NODE_R = [0, 17, 15, 13, 10] as const;
-const RECT_W = [0, 32, 28, 24, 20] as const;
-const RECT_H = [0, 20, 18, 15, 13] as const;
-const FONT   = [0, 14, 13, 11, 10] as const;
+// Node visual sizes — uniform-ish since custom layout doesn't follow depth spacing
+const NODE_R = [0, 20, 19, 17, 15] as const;
+const RECT_W = [0, 36, 34, 32, 28] as const;
+const RECT_H = [0, 22, 21, 19, 17] as const;
+const FONT   = [0, 14, 13, 13, 12] as const;
 
 interface LayoutNode {
   path: string;
@@ -97,7 +97,7 @@ export default function MorseTree({ currentPath, antennaFlash }: Props) {
       {allPaths.filter(p => p !== "").map(path => {
         const { x: x2, y: y2 } = pos(path);
         const { x: x1, y: y1 } = pos(path.slice(0, -1));
-        return <line key={`e${path}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#1e293b" strokeWidth={1} />;
+        return <line key={`e${path}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#cbd5e1" strokeWidth={1.5} />;
       })}
 
       {/* Antenna root */}

@@ -12,7 +12,7 @@ const ROOT_X = SVG_W / 2;
 const ROOT_Y = 30;
 
 // Node visual sizes — uniform-ish since custom layout doesn't follow depth spacing
-const NODE_R = [0, 20, 20, 20, 20] as const;
+const NODE_R = [0, 15, 15, 15, 15] as const;
 const RECT_W = [0, 36, 36, 36, 36] as const;
 const RECT_H = [0, 22, 22, 22, 22] as const;
 const FONT   = [0, 14, 14, 14, 14] as const;
@@ -45,14 +45,14 @@ function nodeState(path: string, cur: string): NodeState {
 interface Style { fill: string; stroke: string; sw: number; text: string; glow: boolean }
 function styleFor(s: NodeState, isDash: boolean): Style {
   if (s === "inactive")
-    return { fill: "#0f172a", stroke: "#94a3b8", sw: 1.5, text: "#e2e8f0", glow: false };
+    return { fill: "#0f172a", stroke: "#94a3b8", sw: 2.25, text: "#e2e8f0", glow: false };
   if (s === "endpoint")
     return isDash
-      ? { fill: "#1a0000", stroke: "#ef4444", sw: 2.5, text: "#fff", glow: true }
-      : { fill: "#001a00", stroke: "#22c55e", sw: 2.5, text: "#fff", glow: true };
+      ? { fill: "#1a0000", stroke: "#ef4444", sw: 3.75, text: "#fff", glow: true }
+      : { fill: "#001a00", stroke: "#22c55e", sw: 3.75, text: "#fff", glow: true };
   return isDash
-    ? { fill: "#1a0800", stroke: "#f97316", sw: 2, text: "#fff", glow: true }
-    : { fill: "#000e2a", stroke: "#60a5fa", sw: 2, text: "#fff", glow: true };
+    ? { fill: "#1a0800", stroke: "#f97316", sw: 3, text: "#fff", glow: true }
+    : { fill: "#000e2a", stroke: "#60a5fa", sw: 3, text: "#fff", glow: true };
 }
 
 const staticNodes = buildNodes();
@@ -93,11 +93,12 @@ export default function MorseTree({ currentPath, antennaFlash }: Props) {
         </filter>
       </defs>
 
-      {/* Edges — always dim */}
+      {/* Edges — thicker on active path */}
       {allPaths.filter(p => p !== "").map(path => {
         const { x: x2, y: y2 } = pos(path);
         const { x: x1, y: y1 } = pos(path.slice(0, -1));
-        return <line key={`e${path}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#cbd5e1" strokeWidth={2} />;
+        const onPath = currentPath !== "" && currentPath.startsWith(path);
+        return <line key={`e${path}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#cbd5e1" strokeWidth={onPath ? 3 : 2} />;
       })}
 
       {/* Antenna root */}

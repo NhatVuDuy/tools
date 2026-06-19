@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useMemo, useState } from "react";
 import { morseTree, MorseNode } from "./morseTree";
-import { getAllPaths, getDefaultPositions, loadPositions, PositionMap, SVG_W, SVG_H } from "./nodeLayout";
+import { getAllPaths, getDefaultPositions, loadPositions, PositionMap, SVG_W, SVG_H, TREE_VIEWBOX } from "./nodeLayout";
 
 interface Props {
   currentPath: string;
@@ -78,8 +78,9 @@ export default function MorseTree({ currentPath, antennaFlash }: Props) {
 
   return (
     <svg
-      viewBox={`0 0 ${SVG_W} ${SVG_H}`}
-      className="w-full rounded-xl bg-gray-950 border border-gray-800"
+      viewBox={TREE_VIEWBOX}
+      className="w-full h-full rounded-xl bg-gray-950 border border-gray-800"
+      preserveAspectRatio="xMidYMid meet"
       style={{ fontFamily: "monospace" }}
     >
       <defs>

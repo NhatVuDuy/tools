@@ -1,22 +1,47 @@
 import { morseTree, MorseNode } from "./morseTree";
 
-export const SVG_W   = 760;
-export const SVG_H   = 345;
-export const SNAP_GRID = 5; // px
+// Coordinate space for the full editor canvas
+export const SVG_W    = 650;
+export const SVG_H    = 380;
+export const SNAP_GRID = 5;
+
+// ViewBox used in the main tree view — cropped tightly to content + padding
+export const TREE_VIEWBOX = "225 5 400 360";
 
 export type PositionMap = Record<string, { x: number; y: number }>;
 
-const ROOT_Y  = 30;
-const LEVEL_Y = [ROOT_Y, 95, 160, 225, 300] as const;
 const STORAGE_KEY = "morse-node-positions-v1";
 
-function binaryTreePos(path: string): { x: number; y: number } {
-  if (!path) return { x: SVG_W / 2, y: ROOT_Y };
-  const d = path.length;
-  let idx = 0;
-  for (const c of path) idx = (idx << 1) | (c === "." ? 1 : 0);
-  return { x: (idx + 0.5) * SVG_W / (1 << d), y: LEVEL_Y[d] };
-}
+// Hardcoded positions from user layout
+const HARDCODED: PositionMap = {
+  "":      { x: 400, y: 30  },
+  ".":     { x: 450, y: 50  },
+  "..":    { x: 500, y: 50  },
+  "...":   { x: 550, y: 50  },
+  "....":  { x: 600, y: 50  },
+  "...-":  { x: 550, y: 100 },
+  "..-":   { x: 500, y: 100 },
+  "..-." : { x: 500, y: 150 },
+  ".-":    { x: 450, y: 200 },
+  ".-.":   { x: 500, y: 200 },
+  ".-..":  { x: 550, y: 200 },
+  ".--":   { x: 450, y: 300 },
+  ".--." : { x: 500, y: 300 },
+  ".---":  { x: 450, y: 340 },
+  "-":     { x: 350, y: 50  },
+  "-.":    { x: 350, y: 200 },
+  "-..":   { x: 350, y: 300 },
+  "-...":  { x: 350, y: 340 },
+  "-..-":  { x: 300, y: 300 },
+  "-.-":   { x: 300, y: 200 },
+  "-.-.":  { x: 300, y: 250 },
+  "-.--":  { x: 250, y: 200 },
+  "--":    { x: 300, y: 50  },
+  "--.":   { x: 300, y: 100 },
+  "--..":  { x: 300, y: 150 },
+  "--.-":  { x: 250, y: 100 },
+  "---":   { x: 250, y: 50  },
+};
 
 function collectPaths(node: MorseNode, path: string, out: string[]) {
   out.push(path);
@@ -31,9 +56,18 @@ export function getAllPaths(): string[] {
 }
 
 export function getDefaultPositions(): PositionMap {
-  const map: PositionMap = {};
-  for (const p of getAllPaths()) map[p] = binaryTreePos(p);
-  return map;
+  // Build binary-tree fallback, then overlay hardcoded values
+  const ROOT_Y  = 30;
+  const LEVEL_Y = [ROOT_Y, 95, 160, 225, 300] as const;
+  const fallback: PositionMap = {};
+  for (const p of getAllPaths()) {
+    if (!p) { fallback[p] = { x: SVG_W / 2, y: ROOT_Y }; continue; }
+    const d = p.length;
+    let idx = 0;
+    for (const c of p) idx = (idx << 1) | (c === "." ? 1 : 0);
+    fallback[p] = { x: (idx + 0.5) * SVG_W / (1 << d), y: LEVEL_Y[d] };
+  }
+  return { ...fallback, ...HARDCODED };
 }
 
 export function loadPositions(): PositionMap {

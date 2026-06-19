@@ -15,7 +15,7 @@ const ROOT_Y = 30;
 const NODE_R = [0, 15, 15, 15, 15] as const;
 const RECT_W = [0, 36, 36, 36, 36] as const;
 const RECT_H = [0, 22, 22, 22, 22] as const;
-const FONT   = [0, 14, 14, 14, 14] as const;
+const FONT   = [0, 16, 16, 16, 16] as const;
 
 interface LayoutNode {
   path: string;

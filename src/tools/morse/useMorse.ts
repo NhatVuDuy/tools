@@ -117,5 +117,12 @@ export function useMorse() {
     scheduleAutoCommit();
   }, [clearAutoCommit, scheduleAutoCommit]);
 
-  return { state, onPressStart, onPressEnd, reset, clearString, backspace };
+  const deleteLastChar = useCallback(() => {
+    setState(s => {
+      if (!s.builtString) return s;
+      return { ...s, builtString: s.builtString.slice(0, -1) };
+    });
+  }, []);
+
+  return { state, onPressStart, onPressEnd, reset, clearString, backspace, deleteLastChar };
 }

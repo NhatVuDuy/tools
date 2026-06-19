@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect } from "react";
+import Link from "next/link";
 import { useMorse } from "./useMorse";
 import { getNodeByPath } from "./morseTree";
 import MorseTree from "./MorseTree";
@@ -85,10 +86,10 @@ export default function MorseApp() {
       <p className="mt-3 text-xs text-gray-600">
         Space = bấm · 1s không bấm = tự thêm ký tự · Esc = reset
       </p>
-      <a href="./morse/editor"
+      <Link href="/morse/editor"
         className="mt-3 text-xs text-gray-700 hover:text-gray-500 underline underline-offset-2 transition-colors">
         Chỉnh layout node →
-      </a>
+      </Link>
     </div>
   );
 }

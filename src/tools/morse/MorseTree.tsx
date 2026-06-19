@@ -1,185 +1,151 @@
 "use client";
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { morseTree, MorseNode } from "./morseTree";
+import { getAllPaths, getDefaultPositions, loadPositions, PositionMap, SVG_W, SVG_H, TREE_VIEWBOX } from "./nodeLayout";
 
 interface Props {
   currentPath: string;
   antennaFlash: boolean;
-  hasChar: boolean;
 }
+
+const ROOT_X = SVG_W / 2;
+const ROOT_Y = 30;
+
+// Node visual sizes — uniform-ish since custom layout doesn't follow depth spacing
+const NODE_R = [0, 20, 20, 20, 20] as const;
+const RECT_W = [0, 36, 36, 36, 36] as const;
+const RECT_H = [0, 22, 22, 22, 22] as const;
+const FONT   = [0, 14, 14, 14, 14] as const;
 
 interface LayoutNode {
-  node: MorseNode;
   path: string;
-  x: number;
-  y: number;
-  isDash: boolean; // how we arrived here (true=dash, false=dot)
+  char: string | null;
+  isDash: boolean;
 }
 
-const W = 560;
-const H = 380;
-const DEPTH_Y = [0, 60, 120, 180, 240, 300];
-const ROOT_X = W / 2;
-const ROOT_Y = 20;
-
-function buildLayout(): LayoutNode[] {
+function buildNodes(): LayoutNode[] {
   const nodes: LayoutNode[] = [];
-
-  function place(
-    node: MorseNode,
-    path: string,
-    depth: number,
-    xMin: number,
-    xMax: number,
-    isDash: boolean
-  ) {
-    const x = (xMin + xMax) / 2;
-    const y = ROOT_Y + DEPTH_Y[depth];
-    if (depth > 0) {
-      nodes.push({ node, path, x, y, isDash });
-    }
-    const mid = (xMin + xMax) / 2;
-    if (node.dot) place(node.dot, path + ".", depth + 1, xMin, mid, false);
-    if (node.dash) place(node.dash, path + "-", depth + 1, mid, xMax, true);
+  function traverse(node: MorseNode, path: string) {
+    if (path) nodes.push({ path, char: node.char, isDash: path.at(-1) === "-" });
+    if (node.dot)  traverse(node.dot,  path + ".");
+    if (node.dash) traverse(node.dash, path + "-");
   }
-
-  // Root's dot subtree = left half, dash subtree = right half
-  if (morseTree.dot)
-    place(morseTree.dot, ".", 1, 0, ROOT_X, false);
-  if (morseTree.dash)
-    place(morseTree.dash, "-", 1, ROOT_X, W, true);
-
+  traverse(morseTree, "");
   return nodes;
 }
 
-function buildEdges(layout: LayoutNode[]): { x1: number; y1: number; x2: number; y2: number; path: string }[] {
-  const byPath = new Map(layout.map(n => [n.path, n]));
-  const edges: { x1: number; y1: number; x2: number; y2: number; path: string }[] = [];
-
-  for (const n of layout) {
-    const parentPath = n.path.slice(0, -1);
-    const parent = parentPath === "" ? { x: ROOT_X, y: ROOT_Y } : byPath.get(parentPath);
-    if (parent) {
-      edges.push({ x1: parent.x, y1: parent.y, x2: n.x, y2: n.y, path: n.path });
-    }
-  }
-  return edges;
+type NodeState = "inactive" | "onPath" | "endpoint";
+function nodeState(path: string, cur: string): NodeState {
+  if (!cur) return "inactive";
+  if (path === cur) return "endpoint";
+  if (cur.startsWith(path)) return "onPath";
+  return "inactive";
 }
 
-export default function MorseTree({ currentPath, antennaFlash, hasChar }: Props) {
-  const layout = useMemo(() => buildLayout(), []);
-  const edges = useMemo(() => buildEdges(layout), [layout]);
+interface Style { fill: string; stroke: string; sw: number; text: string; glow: boolean }
+function styleFor(s: NodeState, isDash: boolean): Style {
+  if (s === "inactive")
+    return { fill: "#0f172a", stroke: "#94a3b8", sw: 1.5, text: "#e2e8f0", glow: false };
+  if (s === "endpoint")
+    return isDash
+      ? { fill: "#1a0000", stroke: "#ef4444", sw: 2.5, text: "#fff", glow: true }
+      : { fill: "#001a00", stroke: "#22c55e", sw: 2.5, text: "#fff", glow: true };
+  return isDash
+    ? { fill: "#1a0800", stroke: "#f97316", sw: 2, text: "#fff", glow: true }
+    : { fill: "#000e2a", stroke: "#60a5fa", sw: 2, text: "#fff", glow: true };
+}
 
-  function nodeColor(path: string, isDash: boolean, char: string | null) {
-    const isActive = currentPath === path;
-    const isOnPath = currentPath.startsWith(path) || path.startsWith(currentPath);
-    const isInPath = currentPath.startsWith(path);
+const staticNodes = buildNodes();
 
-    if (isActive) {
-      // last node in current path
-      if (isDash) return "#ef4444"; // red for dash endpoint
-      return "#22c55e"; // green for dot endpoint
-    }
-    if (isInPath) {
-      // on the active path but not the end
-      if (isDash) return "#f97316"; // orange
-      return "#3b82f6"; // blue
-    }
-    // default
-    if (isDash) return "#78350f"; // dark orange
-    return "#1e3a5f"; // dark blue
-  }
+export default function MorseTree({ currentPath, antennaFlash }: Props) {
+  const [positions, setPositions] = useState<PositionMap>(getDefaultPositions);
 
-  function nodeStroke(path: string) {
-    if (currentPath.startsWith(path)) return "#fbbf24";
-    return "#374151";
-  }
+  useEffect(() => {
+    setPositions(loadPositions());
+    const onStorage = () => setPositions(loadPositions());
+    window.addEventListener("storage", onStorage);
+    // Also listen to custom event fired by editor on same tab
+    window.addEventListener("morse-layout-saved", onStorage);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("morse-layout-saved", onStorage);
+    };
+  }, []);
 
-  function edgeColor(path: string) {
-    if (currentPath.startsWith(path)) return "#fbbf24";
-    return "#374151";
-  }
+  const allPaths = useMemo(() => getAllPaths(), []);
+
+  const pos = (path: string) => positions[path] ?? { x: SVG_W / 2, y: SVG_H / 2 };
 
   return (
     <svg
-      viewBox={`0 0 ${W} ${H}`}
-      className="w-full rounded-xl bg-gray-900 border border-gray-700"
+      viewBox={TREE_VIEWBOX}
+      className="w-full h-full rounded-xl bg-gray-950 border border-gray-800"
+      preserveAspectRatio="xMidYMid meet"
       style={{ fontFamily: "monospace" }}
     >
-      {/* Edges */}
-      {edges.map(e => (
-        <line
-          key={e.path}
-          x1={e.x1} y1={e.y1} x2={e.x2} y2={e.y2}
-          stroke={edgeColor(e.path)}
-          strokeWidth={currentPath.startsWith(e.path) ? 2.5 : 1.5}
-          strokeOpacity={0.8}
-        />
-      ))}
+      <defs>
+        <filter id="mt-glow" x="-80%" y="-80%" width="260%" height="260%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
 
-      {/* Antenna / root */}
-      <g transform={`translate(${ROOT_X}, ${ROOT_Y})`}>
-        {/* Antenna shape */}
-        <line x1={0} y1={0} x2={-8} y2={-16} stroke="#9ca3af" strokeWidth={2} />
-        <line x1={0} y1={0} x2={8} y2={-16} stroke="#9ca3af" strokeWidth={2} />
-        <line x1={-8} y1={-16} x2={8} y2={-16} stroke="#9ca3af" strokeWidth={1} />
-        <circle
-          cx={0} cy={0} r={10}
-          fill={antennaFlash ? "#fbbf24" : "#1f2937"}
-          stroke={antennaFlash ? "#fde68a" : "#4b5563"}
-          strokeWidth={2}
-          style={{ transition: "fill 0.1s" }}
-        />
-      </g>
+      {/* Edges — always dim */}
+      {allPaths.filter(p => p !== "").map(path => {
+        const { x: x2, y: y2 } = pos(path);
+        const { x: x1, y: y1 } = pos(path.slice(0, -1));
+        return <line key={`e${path}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#cbd5e1" strokeWidth={2} />;
+      })}
+
+      {/* Antenna root */}
+      {(() => {
+        const { x, y } = pos("");
+        return (
+          <g>
+            <line x1={x}    y1={y - 22} x2={x - 11} y2={y - 8}  stroke="#4b5563" strokeWidth={1.5} />
+            <line x1={x}    y1={y - 22} x2={x + 11} y2={y - 8}  stroke="#4b5563" strokeWidth={1.5} />
+            <line x1={x-11} y1={y - 8}  x2={x + 11} y2={y - 8}  stroke="#4b5563" strokeWidth={1} />
+            <line x1={x-7}  y1={y - 14} x2={x + 7}  y2={y - 14} stroke="#4b5563" strokeWidth={1} />
+            <circle cx={x} cy={y} r={10}
+              fill={antennaFlash ? "#fbbf24" : "#0f172a"}
+              stroke={antennaFlash ? "#fde68a" : "#374151"}
+              strokeWidth={2}
+              style={{ transition: "fill 0.1s" }}
+            />
+          </g>
+        );
+      })()}
 
       {/* Nodes */}
-      {layout.map(({ node, path, x, y, isDash }) => {
-        const fill = nodeColor(path, isDash, node.char);
-        const stroke = nodeStroke(path);
-        const isActive = currentPath === path;
-        const r = isDash ? 0 : 9; // circle for dot, rect for dash
-
+      {staticNodes.map(({ path, char, isDash }) => {
+        const d = path.length as 1 | 2 | 3 | 4;
+        const s = styleFor(nodeState(path, currentPath), isDash);
+        const { x, y } = pos(path);
+        const fs = FONT[d];
         return (
-          <g key={path} transform={`translate(${x}, ${y})`}>
+          <g key={path} filter={s.glow ? "url(#mt-glow)" : undefined}>
             {isDash ? (
               <rect
-                x={-13} y={-8} width={26} height={16} rx={4}
-                fill={fill}
-                stroke={stroke}
-                strokeWidth={isActive ? 2.5 : 1.5}
-                style={{ transition: "fill 0.15s" }}
+                x={x - RECT_W[d] / 2} y={y - RECT_H[d] / 2}
+                width={RECT_W[d]} height={RECT_H[d]} rx={4}
+                fill={s.fill} stroke={s.stroke} strokeWidth={s.sw}
               />
             ) : (
-              <circle
-                cx={0} cy={0} r={9}
-                fill={fill}
-                stroke={stroke}
-                strokeWidth={isActive ? 2.5 : 1.5}
-                style={{ transition: "fill 0.15s" }}
-              />
+              <circle cx={x} cy={y} r={NODE_R[d]} fill={s.fill} stroke={s.stroke} strokeWidth={s.sw} />
             )}
-            {node.char && (
-              <text
-                x={0} y={4}
-                textAnchor="middle"
-                fontSize={9}
-                fontWeight="bold"
-                fill={isActive ? "#ffffff" : "#d1d5db"}
-              >
-                {node.char}
+            {char && (
+              <text x={x} y={y + fs * 0.38}
+                textAnchor="middle" fontSize={fs} fontWeight="bold" fill={s.text}
+                style={{ pointerEvents: "none" }}>
+                {char}
               </text>
             )}
           </g>
         );
       })}
-
-      {/* Legend */}
-      <g transform={`translate(8, ${H - 50})`}>
-        <rect x={0} y={0} width={16} height={10} rx={2} fill="#f97316" />
-        <text x={20} y={9} fontSize={9} fill="#9ca3af">Dash (—)</text>
-        <circle cx={8} cy={20} r={5} fill="#3b82f6" />
-        <text x={20} y={24} fontSize={9} fill="#9ca3af">Dot (·)</text>
-      </g>
     </svg>
   );
 }

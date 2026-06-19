@@ -1,6 +1,7 @@
 "use client";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getNodeByPath } from "./morseTree";
+import { loadSettings } from "./morseSettings";
 
 export type SignalType = "dot" | "dash";
 
@@ -12,18 +13,27 @@ export interface MorseState {
   antennaFlash: boolean;
 }
 
-const DOT_MAX_MS     = 300;
-const AUTO_COMMIT_MS = 1000;
-
 export function useMorse() {
   const [state, setState] = useState<MorseState>({
     currentPath: "", builtString: "", lastSignal: null, isPressed: false, antennaFlash: false,
   });
 
-  const pressStartRef    = useRef<number | null>(null);
-  const holdTimerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const antennaTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const autoCommitRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const settingsRef     = useRef(loadSettings());
+  const pressStartRef   = useRef<number | null>(null);
+  const holdTimerRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const antennaTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoCommitRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    settingsRef.current = loadSettings();
+    const update = () => { settingsRef.current = loadSettings(); };
+    window.addEventListener("storage", update);
+    window.addEventListener("morse-settings-saved", update);
+    return () => {
+      window.removeEventListener("storage", update);
+      window.removeEventListener("morse-settings-saved", update);
+    };
+  }, []);
 
   const clearAutoCommit = useCallback(() => {
     if (autoCommitRef.current) { clearTimeout(autoCommitRef.current); autoCommitRef.current = null; }
@@ -39,7 +49,7 @@ export function useMorse() {
           return { ...s, builtString: s.builtString + node.char, currentPath: "", lastSignal: null };
         return { ...s, currentPath: "", lastSignal: null };
       });
-    }, AUTO_COMMIT_MS);
+    }, settingsRef.current.autoCommitMs);
   }, [clearAutoCommit]);
 
   const flashAntenna = useCallback(() => {
@@ -53,11 +63,19 @@ export function useMorse() {
     pressStartRef.current = Date.now();
     setState(s => ({ ...s, isPressed: true }));
     flashAntenna();
+    // Hold spaceHoldMs → commit pending char + insert word space
     holdTimerRef.current = setTimeout(() => {
       clearAutoCommit();
-      setState(s => ({ ...s, currentPath: "", lastSignal: null, isPressed: false }));
+      setState(s => {
+        let built = s.builtString;
+        if (s.currentPath) {
+          const node = getNodeByPath(s.currentPath);
+          if (node?.char) built += node.char;
+        }
+        return { ...s, builtString: built + " ", currentPath: "", lastSignal: null, isPressed: false };
+      });
       pressStartRef.current = null;
-    }, 3000);
+    }, settingsRef.current.spaceHoldMs);
   }, [clearAutoCommit, flashAntenna]);
 
   const onPressEnd = useCallback(() => {
@@ -66,7 +84,7 @@ export function useMorse() {
 
     const duration = Date.now() - pressStartRef.current;
     pressStartRef.current = null;
-    const sym = duration < DOT_MAX_MS ? "." : "-";
+    const sym = duration < settingsRef.current.dotMaxMs ? "." : "-";
     const signal: SignalType = sym === "." ? "dot" : "dash";
 
     setState(s => {
@@ -90,5 +108,14 @@ export function useMorse() {
     setState(s => ({ ...s, builtString: "", currentPath: "", lastSignal: null }));
   }, [clearAutoCommit]);
 
-  return { state, onPressStart, onPressEnd, reset, clearString };
+  const backspace = useCallback(() => {
+    clearAutoCommit();
+    setState(s => {
+      if (!s.currentPath) return s;
+      return { ...s, currentPath: s.currentPath.slice(0, -1), lastSignal: null };
+    });
+    scheduleAutoCommit();
+  }, [clearAutoCommit, scheduleAutoCommit]);
+
+  return { state, onPressStart, onPressEnd, reset, clearString, backspace };
 }

@@ -5,6 +5,7 @@ import {
   getAllPaths, getDefaultPositions, loadPositions, savePositions,
   PositionMap, SVG_W, SVG_H, SNAP_GRID,
 } from "./nodeLayout";
+import { loadSettings, saveSettings, DEFAULT_SETTINGS, MorseSettings } from "./morseSettings";
 
 function snap(v: number, g: number) { return Math.round(v / g) * g; }
 
@@ -17,14 +18,40 @@ interface DragState {
 const ALL_PATHS = getAllPaths();
 const GRID_MAJOR = 50;
 
+function Slider({ label, value, min, max, step, unit, onChange }: {
+  label: string; value: number; min: number; max: number; step: number; unit: string;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-xs text-gray-400">
+        {label}: <strong className="text-white">{value}{unit}</strong>
+      </span>
+      <input
+        type="range" min={min} max={max} step={step} value={value}
+        onChange={e => onChange(Number(e.target.value))}
+        className="w-full accent-yellow-400"
+      />
+      <div className="flex justify-between text-xs text-gray-600">
+        <span>{min}{unit}</span><span>{max}{unit}</span>
+      </div>
+    </label>
+  );
+}
+
 export default function MorseEditor() {
-  const [positions, setPositions] = useState<PositionMap>(getDefaultPositions);
-  const [drag, setDrag]     = useState<DragState | null>(null);
-  const [gridSize, setGridSize] = useState(SNAP_GRID);
-  const [saved, setSaved]   = useState(false);
+  const [positions, setPositions]   = useState<PositionMap>(getDefaultPositions);
+  const [drag, setDrag]             = useState<DragState | null>(null);
+  const [gridSize, setGridSize]     = useState(SNAP_GRID);
+  const [layoutSaved, setLayoutSaved] = useState(false);
+  const [settings, setSettings]     = useState<MorseSettings>(DEFAULT_SETTINGS);
+  const [settingsSaved, setSettingsSaved] = useState(false);
   const svgRef = useRef<SVGSVGElement>(null);
 
-  useEffect(() => { setPositions(loadPositions()); }, []);
+  useEffect(() => {
+    setPositions(loadPositions());
+    setSettings(loadSettings());
+  }, []);
 
   const svgCoords = useCallback((cx: number, cy: number) => {
     const el = svgRef.current;
@@ -38,7 +65,7 @@ export default function MorseEditor() {
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
     const p = positions[path] ?? getDefaultPositions()[path];
     setDrag({ path, startCX: e.clientX, startCY: e.clientY, origX: p.x, origY: p.y });
-    setSaved(false);
+    setLayoutSaved(false);
   }, [positions]);
 
   const onSVGMove = useCallback((e: React.PointerEvent) => {
@@ -53,21 +80,33 @@ export default function MorseEditor() {
 
   const onSVGUp = useCallback(() => setDrag(null), []);
 
-  const handleSubmit = () => {
+  const handleSubmitLayout = () => {
     savePositions(positions);
     window.dispatchEvent(new Event("morse-layout-saved"));
-    setSaved(true);
+    setLayoutSaved(true);
   };
 
-  const handleReset = () => {
+  const handleResetLayout = () => {
     const d = getDefaultPositions();
     setPositions(d);
     savePositions(d);
     window.dispatchEvent(new Event("morse-layout-saved"));
-    setSaved(false);
+    setLayoutSaved(false);
   };
 
-  // Build grid lines
+  const handleSaveSettings = () => {
+    saveSettings(settings);
+    window.dispatchEvent(new Event("morse-settings-saved"));
+    setSettingsSaved(true);
+    setTimeout(() => setSettingsSaved(false), 2000);
+  };
+
+  const handleResetSettings = () => {
+    setSettings({ ...DEFAULT_SETTINGS });
+    setSettingsSaved(false);
+  };
+
+  // Grid lines
   const gridLines: React.ReactElement[] = [];
   for (let x = 0; x <= SVG_W; x += gridSize) {
     gridLines.push(
@@ -93,7 +132,7 @@ export default function MorseEditor() {
         Kéo node để đặt lại vị trí · Snap theo grid · Nhấn Submit để lưu
       </p>
 
-      {/* Toolbar */}
+      {/* Layout toolbar */}
       <div className="flex gap-3 items-center mb-4 flex-wrap justify-center">
         <label className="text-xs text-gray-400 flex items-center gap-2">
           Grid
@@ -107,15 +146,15 @@ export default function MorseEditor() {
             <option value={20}>20 px</option>
           </select>
         </label>
-        <button onClick={handleReset}
+        <button onClick={handleResetLayout}
           className="px-3 py-1.5 rounded-lg border border-gray-600 text-gray-300 hover:bg-gray-800 text-xs">
-          ↺ Reset mặc định
+          ↺ Reset vị trí
         </button>
-        <button onClick={handleSubmit}
+        <button onClick={handleSubmitLayout}
           className="px-4 py-1.5 rounded-lg bg-yellow-500 text-gray-900 hover:bg-yellow-400 text-sm font-bold">
-          ✓ Submit & Lưu
+          ✓ Lưu layout
         </button>
-        {saved && <span className="text-green-400 text-xs">✓ Đã lưu!</span>}
+        {layoutSaved && <span className="text-green-400 text-xs">✓ Đã lưu!</span>}
       </div>
 
       {/* SVG canvas */}
@@ -129,7 +168,6 @@ export default function MorseEditor() {
           onPointerUp={onSVGUp}
           onPointerLeave={onSVGUp}
         >
-          {/* Grid */}
           {gridLines}
 
           {/* Edges */}
@@ -149,16 +187,13 @@ export default function MorseEditor() {
             const isRoot = path === "";
             const isDash = path.at(-1) === "-";
 
-            const baseStyle = {
-              cursor: isDragging ? "grabbing" : "grab",
-            } as React.CSSProperties;
-
             if (isRoot) {
               return (
-                <g key={path} style={baseStyle} onPointerDown={e => onNodeDown(e, path)}>
-                  <line x1={x}   y1={y-22} x2={x-11} y2={y-8}  stroke="#6b7280" strokeWidth={1.5} />
-                  <line x1={x}   y1={y-22} x2={x+11} y2={y-8}  stroke="#6b7280" strokeWidth={1.5} />
-                  <line x1={x-11} y1={y-8} x2={x+11} y2={y-8}  stroke="#6b7280" strokeWidth={1} />
+                <g key={path} style={{ cursor: isDragging ? "grabbing" : "grab" }}
+                  onPointerDown={e => onNodeDown(e, path)}>
+                  <line x1={x}    y1={y-22} x2={x-11} y2={y-8}  stroke="#6b7280" strokeWidth={1.5} />
+                  <line x1={x}    y1={y-22} x2={x+11} y2={y-8}  stroke="#6b7280" strokeWidth={1.5} />
+                  <line x1={x-11} y1={y-8}  x2={x+11} y2={y-8}  stroke="#6b7280" strokeWidth={1} />
                   <circle cx={x} cy={y} r={13}
                     fill={isDragging ? "#fbbf24" : "#1f2937"}
                     stroke={isDragging ? "#fde68a" : "#6b7280"}
@@ -176,7 +211,8 @@ export default function MorseEditor() {
             const strokeDot = isDragging ? "#bfdbfe" : "#60a5fa";
 
             return (
-              <g key={path} style={baseStyle} onPointerDown={e => onNodeDown(e, path)}>
+              <g key={path} style={{ cursor: isDragging ? "grabbing" : "grab" }}
+                onPointerDown={e => onNodeDown(e, path)}>
                 {isDash ? (
                   <rect x={x-16} y={y-10} width={32} height={20} rx={5}
                     fill={fillDash} stroke={strokeDash} strokeWidth={isDragging ? 2.5 : 1.5} />
@@ -185,14 +221,13 @@ export default function MorseEditor() {
                     fill={fillDot} stroke={strokeDot} strokeWidth={isDragging ? 2.5 : 1.5} />
                 )}
                 {node.char && (
-                  <text x={x} y={y + 4} textAnchor="middle" fontSize={11} fontWeight="bold" fill="#f1f5f9"
+                  <text x={x} y={y+4} textAnchor="middle" fontSize={11} fontWeight="bold" fill="#f1f5f9"
                     style={{ pointerEvents: "none" }}>
                     {node.char}
                   </text>
                 )}
-                {/* coordinate tooltip on drag */}
                 {isDragging && (
-                  <text x={x} y={y - 18} textAnchor="middle" fontSize={8} fill="#fbbf24"
+                  <text x={x} y={y-18} textAnchor="middle" fontSize={8} fill="#fbbf24"
                     style={{ pointerEvents: "none" }}>
                     {Math.round(x)},{Math.round(y)}
                   </text>
@@ -213,6 +248,39 @@ export default function MorseEditor() {
           value={JSON.stringify(positions, null, 2)}
           className="w-full h-36 bg-gray-900 border border-gray-700 rounded-lg p-3 font-mono text-xs text-gray-400 resize-y"
         />
+      </div>
+
+      {/* Settings panel */}
+      <div className="w-full max-w-5xl mt-6 bg-gray-900 border border-gray-700 rounded-xl p-5">
+        <h2 className="text-sm font-bold text-yellow-400 mb-4">Cài đặt thời gian</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+          <Slider
+            label="Dot tối đa" value={settings.dotMaxMs}
+            min={50} max={500} step={10} unit="ms"
+            onChange={v => setSettings(s => ({ ...s, dotMaxMs: v }))}
+          />
+          <Slider
+            label="Tự commit chữ sau" value={settings.autoCommitMs}
+            min={300} max={3000} step={100} unit="ms"
+            onChange={v => setSettings(s => ({ ...s, autoCommitMs: v }))}
+          />
+          <Slider
+            label="Giữ để cách từ" value={settings.spaceHoldMs}
+            min={1000} max={5000} step={100} unit="ms"
+            onChange={v => setSettings(s => ({ ...s, spaceHoldMs: v }))}
+          />
+        </div>
+        <div className="flex gap-3 mt-4 items-center">
+          <button onClick={handleSaveSettings}
+            className="px-4 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-500 text-sm font-bold">
+            ✓ Lưu cài đặt
+          </button>
+          <button onClick={handleResetSettings}
+            className="px-3 py-1.5 rounded-lg border border-gray-600 text-gray-300 hover:bg-gray-800 text-xs">
+            ↺ Mặc định
+          </button>
+          {settingsSaved && <span className="text-green-400 text-xs">✓ Đã lưu!</span>}
+        </div>
       </div>
     </div>
   );

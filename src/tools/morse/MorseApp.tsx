@@ -7,7 +7,7 @@ import MorseTree from "./MorseTree";
 
 function BroadcastIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" className="w-6 h-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
       <circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none" />
       <path d="M8.5 8.5 a5 5 0 0 0 0 7" />
       <path d="M15.5 8.5 a5 5 0 0 1 0 7" />
@@ -17,18 +17,9 @@ function BroadcastIcon() {
   );
 }
 
-function BackspaceIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z" />
-      <line x1="18" y1="9" x2="12" y2="15" />
-      <line x1="12" y1="9" x2="18" y2="15" />
-    </svg>
-  );
-}
 
 export default function MorseApp() {
-  const { state, onPressStart, onPressEnd, reset, clearString } = useMorse();
+  const { state, onPressStart, onPressEnd, reset, clearString, backspace } = useMorse();
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -76,16 +67,16 @@ export default function MorseApp() {
       {/* ── Footer ── */}
       <div className="flex-none px-4 pt-1 pb-3 flex flex-col gap-2">
 
-        {/* Button row: [Xoá chuỗi]  [◉]  [⌫] */}
-        <div className="flex items-center justify-center gap-6">
+        {/* Button row: [Reset] ←  [◉]  → [⌫] */}
+        <div className="flex items-center justify-between">
           <button onClick={clearString}
             className="px-3 py-1.5 rounded-lg border border-red-800 text-red-400 hover:bg-red-900/40 text-sm font-semibold transition-all">
-            Xoá chuỗi
+            Làm lại
           </button>
 
           {/* Touch button — half size */}
           <button
-            className={`w-12 h-12 rounded-full border-2 flex items-center justify-center transition-all duration-75
+            className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-75
               ${state.isPressed
                 ? "bg-yellow-400 border-yellow-300 scale-95 text-gray-900 shadow-[0_0_20px_rgba(250,204,21,0.8)]"
                 : "bg-gray-800 border-gray-600 hover:border-gray-500 text-yellow-400 shadow-[0_0_10px_rgba(250,204,21,0.15)]"
@@ -99,19 +90,21 @@ export default function MorseApp() {
             <BroadcastIcon />
           </button>
 
-          <button onClick={reset}
-            className="w-10 h-10 rounded-lg border border-gray-700 text-gray-400 hover:bg-gray-800 flex items-center justify-center transition-all">
-            <BackspaceIcon />
+          <button onClick={backspace}
+            className="px-3 py-1.5 rounded-lg border border-gray-700 text-gray-400 hover:bg-gray-800 text-sm font-semibold transition-all">
+            Xoá
           </button>
         </div>
 
-        {/* Bottom info row: Layout → bên trái, hint text */}
-        <div className="flex items-center gap-3">
+        {/* Hint text */}
+        <div className="text-xs text-gray-700 text-center">Space = bấm · 1s = tự thêm · Esc = reset</div>
+
+        {/* CTA row */}
+        <div>
           <Link href="/morse/editor"
-            className="text-xs text-gray-600 hover:text-gray-400 underline underline-offset-2 transition-colors whitespace-nowrap">
+            className="text-xs text-gray-600 hover:text-gray-400 underline underline-offset-2 transition-colors">
             Layout →
           </Link>
-          <span className="text-xs text-gray-700">Space = bấm · 1s = tự thêm · Esc = reset</span>
         </div>
       </div>
     </div>

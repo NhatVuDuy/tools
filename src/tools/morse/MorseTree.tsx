@@ -111,15 +111,25 @@ export default function MorseTree({ currentPath, antennaFlash }: Props) {
         return <line key={`e${path}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke={stroke} strokeWidth={sw} />;
       })}
 
-      {/* Antenna root */}
+      {/* Antenna root — inverted triangle ▽ + stem + signal arcs */}
       {(() => {
         const { x, y } = pos("");
+        const sc = antennaFlash ? "#fbbf24" : "#6b7280";
+        // Triangle: base at y-26, apex at y-16; stem connects apex to circle top (y-10)
         return (
           <g>
-            <line x1={x}    y1={y - 22} x2={x - 11} y2={y - 8}  stroke="#4b5563" strokeWidth={1.5} />
-            <line x1={x}    y1={y - 22} x2={x + 11} y2={y - 8}  stroke="#4b5563" strokeWidth={1.5} />
-            <line x1={x-11} y1={y - 8}  x2={x + 11} y2={y - 8}  stroke="#4b5563" strokeWidth={1} />
-            <line x1={x-7}  y1={y - 14} x2={x + 7}  y2={y - 14} stroke="#4b5563" strokeWidth={1} />
+            {/* Signal arcs opening upward above triangle base */}
+            <path d={`M ${x-3} ${y-26} a 3 3 0 0 0 6 0`}
+              stroke={sc} strokeWidth={1} fill="none" opacity={antennaFlash ? 1 : 0.7} />
+            <path d={`M ${x-7} ${y-26} a 7 7 0 0 0 14 0`}
+              stroke={sc} strokeWidth={1} fill="none" opacity={antennaFlash ? 0.8 : 0.4} />
+            {/* Inverted triangle (base at top, apex pointing down) */}
+            <line x1={x-9} y1={y-26} x2={x} y2={y-16} stroke={sc} strokeWidth={1.5} strokeLinecap="round" />
+            <line x1={x+9} y1={y-26} x2={x} y2={y-16} stroke={sc} strokeWidth={1.5} strokeLinecap="round" />
+            <line x1={x-9} y1={y-26} x2={x+9} y2={y-26} stroke={sc} strokeWidth={1.5} strokeLinecap="round" />
+            {/* Stem: apex to circle top */}
+            <line x1={x} y1={y-16} x2={x} y2={y-10} stroke={sc} strokeWidth={1.5} strokeLinecap="round" />
+            {/* Circle */}
             <circle cx={x} cy={y} r={10}
               fill={antennaFlash ? "#fbbf24" : "#0f172a"}
               stroke={antennaFlash ? "#fde68a" : "#374151"}

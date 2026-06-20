@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useMorse } from "./useMorse";
 import { getNodeByPath } from "./morseTree";
@@ -17,9 +17,23 @@ function BroadcastIcon() {
   );
 }
 
+function CopyIcon({ checked }: { checked: boolean }) {
+  if (checked) return (
+    <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round">
+      <path d="M5 13l4 4L19 7" />
+    </svg>
+  );
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+      <rect x="8" y="8" width="12" height="14" rx="1.5" />
+      <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h2" />
+    </svg>
+  );
+}
 
 export default function MorseApp() {
   const { state, onPressStart, onPressEnd, reset, clearString, deleteLastChar } = useMorse();
+  const [copiedStr, setCopiedStr] = useState(false);
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -34,6 +48,13 @@ export default function MorseApp() {
     return () => { window.removeEventListener("keydown", down); window.removeEventListener("keyup", up); };
   }, [onPressStart, onPressEnd, reset]);
 
+  const handleCopyStr = useCallback(async () => {
+    if (!state.builtString) return;
+    await navigator.clipboard.writeText(state.builtString);
+    setCopiedStr(true);
+    setTimeout(() => setCopiedStr(false), 1500);
+  }, [state.builtString]);
+
   const currentNode = state.currentPath ? getNodeByPath(state.currentPath) : null;
 
   return (
@@ -41,16 +62,30 @@ export default function MorseApp() {
 
       {/* ── Header ── */}
       <div className="flex-none px-4 pt-3 pb-1 flex flex-col items-center gap-1.5">
-        {/* String — single line, horizontal scroll */}
-        <div className="w-full max-w-sm bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 font-mono text-lg text-green-400 overflow-x-auto whitespace-nowrap scrollbar-none">
-          {state.builtString
-            ? state.builtString.split("").map((c, i) =>
-                c === " "
-                  ? <span key={i} className="text-gray-500">_</span>
-                  : <span key={i}>{c}</span>
-              )
-            : <span className="text-gray-700">...</span>
-          }
+        {/* String row: [scrollable text] [copy button] */}
+        <div className="w-full max-w-sm flex items-stretch gap-1">
+          <div className="flex-1 min-w-0 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 font-mono text-lg text-green-400 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
+            {state.builtString
+              ? state.builtString.split("").map((c, i) =>
+                  c === " "
+                    ? <span key={i} className="text-gray-500">_</span>
+                    : <span key={i}>{c}</span>
+                )
+              : <span className="text-gray-700">...</span>
+            }
+          </div>
+          <button
+            onClick={handleCopyStr}
+            disabled={!state.builtString}
+            className={`flex-none bg-gray-900 border border-gray-700 rounded-lg px-2.5 flex items-center justify-center transition-all
+              ${state.builtString
+                ? "text-gray-400 hover:text-white hover:bg-gray-700 hover:border-gray-500"
+                : "text-gray-700 cursor-not-allowed"
+              }`}
+            title="Copy"
+          >
+            <CopyIcon checked={copiedStr} />
+          </button>
         </div>
 
         {/* Current path */}
@@ -74,7 +109,7 @@ export default function MorseApp() {
       {/* ── Footer ── */}
       <div className="flex-none px-4 pt-1 pb-3 flex flex-col gap-2">
 
-        {/* Button row: [Reset] ←  [◉]  → [⌫] */}
+        {/* Button row: [Làm lại] ←  [◉]  → [Xoá] */}
         <div className="flex items-center justify-between">
           <button onClick={clearString}
             className="px-3 py-1.5 rounded-lg border border-red-800 text-red-400 hover:bg-red-900/40 text-sm font-semibold transition-all">

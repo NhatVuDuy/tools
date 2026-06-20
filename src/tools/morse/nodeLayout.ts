@@ -5,8 +5,8 @@ export const SVG_W    = 650;
 export const SVG_H    = 380;
 export const SNAP_GRID = 5;
 
-// ViewBox used in the main tree view — cropped tightly to content + padding
-export const TREE_VIEWBOX = "225 5 400 380";
+// ViewBox used in the main tree view — y starts at -5 to give headroom for antenna arcs
+export const TREE_VIEWBOX = "225 -5 400 390";
 
 export type PositionMap = Record<string, { x: number; y: number }>;
 

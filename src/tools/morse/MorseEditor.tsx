@@ -40,7 +40,15 @@ function Slider({ label, value, min, max, step, unit, onChange }: {
   );
 }
 
+function todayPassword(): string {
+  const d = new Date();
+  return String(d.getMonth() + 1).padStart(2, "0") + String(d.getDate()).padStart(2, "0");
+}
+
 export default function MorseEditor() {
+  const [unlocked, setUnlocked]           = useState(false);
+  const [pwInput, setPwInput]             = useState("");
+  const [pwError, setPwError]             = useState(false);
   const [positions, setPositions]         = useState<PositionMap>(getDefaultPositions);
   const [drag, setDrag]                   = useState<DragState | null>(null);
   const [gridSize, setGridSize]           = useState(SNAP_GRID);
@@ -51,17 +59,28 @@ export default function MorseEditor() {
   const svgRef       = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  const handleUnlock = () => {
+    if (pwInput === todayPassword()) {
+      setUnlocked(true);
+      setPwError(false);
+    } else {
+      setPwError(true);
+      setPwInput("");
+    }
+  };
+
   useEffect(() => {
+    if (!unlocked) return;
     setPositions(loadPositions());
     setSettings(loadSettings());
-    // Scroll to show the tree (nodes are at SVG x≈225–625, y≈30–380; physical 2×)
+    // Scroll to center the tree (nodes are at SVG x≈225–625; physical 2×)
     setTimeout(() => {
       if (containerRef.current) {
         containerRef.current.scrollLeft = 450;
         containerRef.current.scrollTop  = 0;
       }
     }, 0);
-  }, []);
+  }, [unlocked]);
 
   const clientToSVG = useCallback((clientX: number, clientY: number) => {
     const el = svgRef.current;
@@ -143,6 +162,41 @@ export default function MorseEditor() {
 
   const pos = (path: string) => positions[path] ?? { x: SVG_W / 2, y: SVG_H / 2 };
 
+  if (!unlocked) {
+    return (
+      <div className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center px-4">
+        <div className="bg-gray-900 border border-gray-700 rounded-xl p-8 w-full max-w-xs flex flex-col items-center gap-5">
+          <svg viewBox="0 0 24 24" fill="none" className="w-10 h-10 text-yellow-400" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
+          <div className="text-center">
+            <h1 className="text-base font-bold tracking-widest text-yellow-400">Layout Editor</h1>
+            <p className="text-xs text-gray-500 mt-1">Nhập mật khẩu để tiếp tục</p>
+          </div>
+          <input
+            type="password"
+            inputMode="numeric"
+            maxLength={4}
+            value={pwInput}
+            onChange={e => { setPwInput(e.target.value); setPwError(false); }}
+            onKeyDown={e => e.key === "Enter" && handleUnlock()}
+            placeholder="••••"
+            className={`w-full bg-gray-800 border rounded-lg px-4 py-3 text-center font-mono text-2xl tracking-[0.5em] text-white focus:outline-none transition-colors
+              ${pwError ? "border-red-500 focus:border-red-400" : "border-gray-600 focus:border-yellow-500"}`}
+            autoFocus
+          />
+          {pwError && <p className="text-red-400 text-xs -mt-2">Sai mật khẩu</p>}
+          <button onClick={handleUnlock}
+            className="w-full py-2.5 rounded-lg bg-yellow-500 text-gray-900 font-bold text-sm hover:bg-yellow-400 transition-all active:scale-95">
+            Mở khoá
+          </button>
+          <p className="text-xs text-gray-700">Gợi ý: tháng và ngày hôm nay (MMDD)</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-950 text-white flex flex-col items-center py-6 px-4 select-none">
       <h1 className="text-xl font-bold tracking-widest text-yellow-400 mb-1">
@@ -215,19 +269,22 @@ export default function MorseEditor() {
             const isDash = path.at(-1) === "-";
 
             if (isRoot) {
+              const sc = isDragging ? "#fde68a" : "#6b7280";
               return (
                 <g key={path} style={{ cursor: isDragging ? "grabbing" : "grab" }}
                   onPointerDown={e => onNodeDown(e, path)}>
-                  <line x1={x}    y1={y-22} x2={x-11} y2={y-8}  stroke="#6b7280" strokeWidth={1.5} />
-                  <line x1={x}    y1={y-22} x2={x+11} y2={y-8}  stroke="#6b7280" strokeWidth={1.5} />
-                  <line x1={x-11} y1={y-8}  x2={x+11} y2={y-8}  stroke="#6b7280" strokeWidth={1} />
+                  {/* Inverted triangle ▽ + signal arcs */}
+                  <path d={`M ${x-3} ${y-26} a 3 3 0 0 0 6 0`} stroke={sc} strokeWidth={1} fill="none" opacity={0.7} />
+                  <path d={`M ${x-7} ${y-26} a 7 7 0 0 0 14 0`} stroke={sc} strokeWidth={1} fill="none" opacity={0.4} />
+                  <line x1={x-9} y1={y-26} x2={x} y2={y-16} stroke={sc} strokeWidth={1.5} strokeLinecap="round" />
+                  <line x1={x+9} y1={y-26} x2={x} y2={y-16} stroke={sc} strokeWidth={1.5} strokeLinecap="round" />
+                  <line x1={x-9} y1={y-26} x2={x+9} y2={y-26} stroke={sc} strokeWidth={1.5} strokeLinecap="round" />
+                  <line x1={x} y1={y-16} x2={x} y2={y-10} stroke={sc} strokeWidth={1.5} strokeLinecap="round" />
                   <circle cx={x} cy={y} r={13}
                     fill={isDragging ? "#fbbf24" : "#1f2937"}
                     stroke={isDragging ? "#fde68a" : "#6b7280"}
                     strokeWidth={2}
                   />
-                  <text x={x} y={y+4} textAnchor="middle" fontSize={9} fill="#9ca3af"
-                    style={{ pointerEvents: "none" }}>ANT</text>
                 </g>
               );
             }
